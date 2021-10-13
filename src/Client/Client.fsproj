@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net5.0</TargetFramework>
+        <DefineConstants>FABLE_COMPILER</DefineConstants>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="index.html" />
+        <None Include="paket.references" />
+        <Compile Include="Pages\CommonLayoutItems.fs" />
+
+        <!-- Models -->
+        <Compile Include="Pages/Brokers/Models.fs" />
+        <Compile Include="Pages\Topics\Models.fs" />
+        <Compile Include="Pages\Consumers\Models.fs" />
+        <Compile Include="Models.fs" />
+
+        <!-- Data -->
+        <Compile Include="Pages/Brokers/Data.fs" />
+        <Compile Include="Pages\Topics\Data.fs" />
+        <Compile Include="Pages\Consumers\Data.fs" />
+
+        <!-- Views -->
+        <Compile Include="Pages/Brokers/BrokerRollingRestartConfigurationDialog.fs" />
+        <Compile Include="Pages/Brokers/BrokerEditConfiguration.fs" />
+        <Compile Include="Pages/Brokers/BrokerConfiguration.fs" />
+        <Compile Include="Pages/Brokers/BrokerSummary.fs" />
+        <Compile Include="Pages\Topics\CreateTopicDialog.fs" />
+        <Compile Include="Pages\Topics\EditTopicConfigurationPropertyDialog.fs" />
+        <Compile Include="Pages\Topics\AddPartitionDialog.fs" />
+        <Compile Include="Pages\Topics\PurgeTopicConfirmationDialog.fs" />
+        <Compile Include="Pages\Topics\ManageTopic.fs" />
+        <Compile Include="Pages\Topics\TopicSummary.fs" />
+        <Compile Include="Pages\Consumers\CreateConsumerDialog.fs" />
+        <Compile Include="Pages\Consumers\DeleteConsumerGroupConfirmationDialog.fs" />
+        <Compile Include="Pages\Consumers\ManageConsumerGroup.fs" />
+        <Compile Include="Pages\Consumers\ConsumerGroupSummary.fs" />
+        <Compile Include="Pages/Layout.fs" />
+
+        <!-- Bootstrapping -->
+        <Compile Include="Index.fs" />
+        <Compile Include="App.fs" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Shared\Shared.fsproj" />
+    </ItemGroup>
+    <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>
