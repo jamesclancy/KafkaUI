@@ -1,0 +1,1 @@
+module Client.Pages.Consumers.CreateConsumerDialog
