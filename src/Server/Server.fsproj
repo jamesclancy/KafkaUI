@@ -5,6 +5,7 @@
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="KafkaInterface\KafkaModels.fs" />
     <Compile Include="KafkaInterface\ClientBuilder.fs" />
     <Compile Include="ApiImplementations\Consumers.fs" />
     <Compile Include="ApiImplementations\Brokers.fs" />

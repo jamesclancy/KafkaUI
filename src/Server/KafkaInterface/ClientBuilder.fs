@@ -21,23 +21,26 @@ type ConsumerGroupTopicPartitionMetadataHolder =
       TopicPartitionOffset: TopicPartitionOffset
       WatermarkOffsets: WatermarkOffsets }
 
+type ConsumerGroupTopicMetadataHolder =
+    { ConsumerGroup: GroupInfo
+      TopicMetadata: TopicMetadata
+      ConsumerGroupTopicPartitionMetadataHolders: ConsumerGroupTopicPartitionMetadataHolder list }
+
 type TopicMetadataHolder =
     { TopicMetadata: TopicMetadata
-      ConsumerGroups: ConsumerGroupTopicPartitionMetadataHolder list
+      TopicPartitionOffsets: WatermarkOffsets list
+      ConsumerGroups: ConsumerGroupTopicMetadataHolder list
       TopicConfiguration: ConfigEntryResult list }
     member this.HighestOffset =
-        this
-            .ConsumerGroups
-            .Where(fun x-> x.WatermarkOffsets <> null)
-            .GroupBy(fun x -> x.TopicPartition)
-            .Select(fun x -> x.Max(fun y -> y.WatermarkOffsets.High.Value))
-            .Sum()
+        this.TopicPartitionOffsets
+        |> Seq.filter (fun x -> x.High.IsSpecial = false)
+        |> Seq.map (fun x -> x.High.Value)
+        |> Seq.sum
 
     member this.ConsumerCount =
-        this
-            .ConsumerGroups
-            .Select(fun x -> x.ConsumerGroup.Members.Count)
-            .Sum()
+        this.ConsumerGroups
+        |> Seq.map (fun x -> x.ConsumerGroup.Members.Count)
+        |> Seq.sum
 
     member this.Name = this.TopicMetadata.Topic
     member this.Partitions = this.TopicMetadata.Partitions
@@ -199,27 +202,40 @@ let getConsumersGroupsInfoForTopic (topicMetadata: TopicMetadata) (groupMetadata
     seq {
         let consumer = (getConsumerClient groupMetadata.Group)
 
-        topicMetadata.Partitions
-        |> Seq.map (fun x -> new TopicPartition(topicMetadata.Topic, new Partition(x.PartitionId)))
-        |> consumer.Assign
+        let topicPartitions =
+            topicMetadata.Partitions
+            |> Seq.map (fun x -> new TopicPartition(topicMetadata.Topic, new Partition(x.PartitionId)))
 
-        let partitionLags = consumer.Committed(defaultTimeout)
+        topicPartitions |> consumer.Assign
 
-        let partitions = partitionLags|> Seq.map (fun x -> x.TopicPartition)
+        let topicParisionTimestamps =
+            topicPartitions
+            |> Seq.map (fun x -> new TopicPartitionTimestamp(x, new Timestamp(System.DateTime.MinValue)))
 
-        for lag in partitionLags do
-            //if lag.Offset.Value > -1000L and  then
-            let partitionInfo =
-                consumer.GetWatermarkOffsets(lag.TopicPartition)//, defaultTimeout) // ToDo:    This doesn't work (it only looks at caches and is a massive n+1 problem.
-                                                                                    //          I am not certain hwo to implement this over the existing apis
+        let offsets =
+            consumer.OffsetsForTimes(topicParisionTimestamps, defaultTimeout)
 
-            yield
-                { ConsumerGroup = groupMetadata
-                  TopicMetadata = topicMetadata
-                  TopicPartition = lag.TopicPartition
-                  TopicPartitionOffset = lag
-                  WatermarkOffsets = partitionInfo }
+        for lag in offsets do
+            if lag.Offset.Value > -1L then
+                let partitionInfo =
+                    consumer.GetWatermarkOffsets(lag.TopicPartition) //, defaultTimeout) // ToDo:    This doesn't work (it only looks at caches and is a massive n+1 problem.
+                //          I am not certain hwo to implement this over the existing apis
+                //          maybe thsio could use OffsetsForTimes ?
+
+                yield
+                    { ConsumerGroup = groupMetadata
+                      TopicMetadata = topicMetadata
+                      TopicPartition = lag.TopicPartition
+                      TopicPartitionOffset = lag
+                      WatermarkOffsets = partitionInfo }
     }
+
+    |> Seq.groupBy (fun x -> (x.ConsumerGroup, x.TopicMetadata))
+    |> Seq.map
+        (fun ((cg, tm), y) ->
+            { ConsumerGroup = cg
+              TopicMetadata = tm
+              ConsumerGroupTopicPartitionMetadataHolders = y |> List.ofSeq })
 
 let private getTopicInformationForTopic (groups: GroupInfo seq) (topicMetadata: TopicMetadata) =
     async {
@@ -230,15 +246,34 @@ let private getTopicInformationForTopic (groups: GroupInfo seq) (topicMetadata: 
             adminClient.DescribeConfigsAsync([ describeConfigsOptions ])
             |> Async.AwaitTask
 
+        let consumer =
+            (getConsumerClient "getTopicInformationForTopic")
+
+        let topicPartitions =
+            topicMetadata.Partitions
+            |> Seq.map (fun x -> new TopicPartition(topicMetadata.Topic, new Partition(x.PartitionId)))
+
+        topicPartitions |> consumer.Assign
+
+        let res =
+            consumer.Consume(System.TimeSpan.FromMilliseconds(10.0))
+
+        let offsets =
+            topicPartitions
+            |> Seq.map consumer.GetWatermarkOffsets
+            |> Seq.toList
+
         return
             { TopicMetadata = topicMetadata
-              ConsumerGroups = groups.SelectMany(fun x -> getConsumersGroupsInfoForTopic topicMetadata x) |> List.ofSeq
+              TopicPartitionOffsets = offsets
+              ConsumerGroups =
+                  groups.SelectMany(fun x -> getConsumersGroupsInfoForTopic topicMetadata x)
+                  |> List.ofSeq
               TopicConfiguration =
                   topicDetails
                       .Select(fun x -> x.Entries)
                       .SelectMany(fun x -> x.Select(fun y -> y.Value))
-                  |> List.ofSeq
-                  }
+                  |> List.ofSeq }
     }
 
 let getTopicInformationForClusterMetadata (clusterMetadata: Metadata) =
@@ -438,7 +473,7 @@ let updateBrokerConfigurationProperty brokerId propertyName newValue =
 
 let groupInfoToConsumerGroupSummaryConsumerGroupSummary (groupInfo: GroupInfo) =
     { ConsumerGroupName = groupInfo.Group
-      State = groupInfo.State // ToDo
+      State = groupInfo.State
       Lag = 1 // ToDo
       Members = groupInfo.Members.Count // ToDo
       AssignedPartitions = 1 // ToDo
@@ -478,6 +513,14 @@ let getConsumerGroupDetails consumerGroupName =
             groupInfo.Members
             |> Seq.map
                 (fun x ->
+                    System.Console.WriteLine("writing out member metadata...")
+
+                    System.Console.WriteLine(System.Text.Encoding.UTF8.GetString(x.MemberMetadata))
+                    |> ignore
+
+                    System.Console.WriteLine(System.Text.Encoding.UTF8.GetString(x.MemberAssignment))
+                    |> ignore
+
                     { ConsumerGroupName = consumerGroupName
                       MemberType = "ToDo"
                       MemberId = x.MemberId

@@ -98,9 +98,9 @@ let addPartitionDialogView (model: ManageTopicViewModel) (dispatch: ManageTopicM
                              CloseAddPartitionDialog
                              |> AddPartitionDialogMsg
                              |> dispatch)
-                     dialog.children [ Mui.dialogTitle "Edit Topic Configuratin Property"
+                     dialog.children [ Mui.dialogTitle "Add Topic Partitions"
                                        Mui.dialogContent [ Mui.dialogContentText
-                                                               "Consumers can then listen to events send on these topics"
+                                                               "Partitions allow events to be divided between consumers."
                                                            Mui.dialogContent [ errorMessage ]
                                                            Mui.textField [ textField.autoFocus false
                                                                            textField.margin.dense
