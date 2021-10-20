@@ -31,10 +31,10 @@ type TopicMetadataHolder =
       TopicPartitionOffsets: WatermarkOffsets list
       ConsumerGroups: ConsumerGroupTopicMetadataHolder list
       TopicConfiguration: ConfigEntryResult list }
-    member this.HighestOffset =
+    member this.EventCount =
         this.TopicPartitionOffsets
         |> Seq.filter (fun x -> x.High.IsSpecial = false)
-        |> Seq.map (fun x -> x.High.Value)
+        |> Seq.map (fun x -> x.High.Value - x.Low.Value)
         |> Seq.sum
 
     member this.ConsumerCount =
@@ -193,7 +193,7 @@ let topicSummariesFromMetadata (topicMetadata: TopicMetadataHolder) : TopicSumma
     { Name = topicMetadata.Name
       Partitions = topicMetadata.PartitionCount
       UnderReplicatedPartitions = topicMetadata.UnderReplicatedPartitionCount
-      Count = topicMetadata.HighestOffset
+      Count = topicMetadata.EventCount
       SizeInBytes = 0
       Consumers = topicMetadata.ConsumerCount }
 
@@ -343,7 +343,7 @@ let getTopicDetails topicName =
 
         return
             { TopicName = topicName
-              EventCount = topicMetadata.HighestOffset
+              EventCount = topicMetadata.EventCount
               PartitionCount = topicMetadata.PartitionCount
               PartitionsWithoutLeaderCount = topicMetadata.PartitionWithoutLeaderCount
               ReplicationFactor = topicMetadata.MinInSyncReplicas
